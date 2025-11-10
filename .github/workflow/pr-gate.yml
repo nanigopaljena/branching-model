@@ -1,0 +1,108 @@
+name: PR Gate Validation
+
+on:
+  pull_request:
+    branches: [main, develop]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  pr-gate:
+    name: Run PR Gate Checks
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java 17 (Temurin) with Gradle cache
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+
+      # Ensures wrapper hasn’t been tampered with and exists at standard path:
+      # gradle/wrapper/gradle-wrapper.jar, gradle/wrapper/gradle-wrapper.properties
+      - name: Validate Gradle Wrapper
+        uses: gradle/wrapper-validation-action@v3
+
+      # Make sure the wrapper script at repo root is executable
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Gradle version
+        run: ./gradlew --version
+
+      - name: Build (no tests)
+        run: ./gradlew clean build -x test
+
+      - name: Run unit tests
+        run: ./gradlew test --info
+
+      # --- Optional checks (auto-skip if task not found) ---
+
+      - name: Static analysis (Checkstyle + SpotBugs) if present
+        run: |
+          set -e
+          TASKS=$(./gradlew -q tasks --all)
+          if echo "$TASKS" | grep -q "\bcheckstyleMain\b"; then ./gradlew checkstyleMain checkstyleTest; else echo "checkstyle* not configured, skipping."; fi
+          if echo "$TASKS" | grep -q "\bspotbugsMain\b";   then ./gradlew spotbugsMain spotbugsTest;   else echo "spotbugs* not configured, skipping.";   fi
+
+      - name: Security scan (OWASP Dependency-Check) if present
+        run: |
+          TASKS=$(./gradlew -q tasks --all)
+          if echo "$TASKS" | grep -q "\bdependencyCheckAnalyze\b"; then
+            ./gradlew dependencyCheckAnalyze
+          else
+            echo "OWASP dependencyCheckAnalyze not configured, skipping."
+          fi
+
+      - name: Code coverage (JaCoCo) if present
+        run: |
+          TASKS=$(./gradlew -q tasks --all)
+          if echo "$TASKS" | grep -q "\bjacocoTestReport\b"; then
+            ./gradlew jacocoTestReport
+            echo "📊 Coverage report: build/reports/jacoco/test/html/index.html" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "JaCoCo not configured, skipping." >> $GITHUB_STEP_SUMMARY
+          fi
+
+      # --- Artifacts for quick inspection in PR ---
+
+      - name: Upload JARs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-libs
+          path: build/libs/
+
+      - name: Upload unit test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: build/reports/tests/test/
+
+      - name: Upload code quality & security reports (best-effort)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-security-reports
+          path: |
+            build/reports/checkstyle/
+            build/reports/spotbugs/
+            build/reports/dependency-check-report.html
+          if-no-files-found: ignore
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "✅ Build and tests completed" >> $GITHUB_STEP_SUMMARY
+          echo "🧪 Test report: build/reports/tests/test/index.html" >> $GITHUB_STEP_SUMMARY
+          echo "📦 Artifacts uploaded: build-libs, test-report, quality-security-reports" >> $GITHUB_STEP_SUMMARY
