@@ -1,4 +1,4 @@
-package com.sample.kafka;
+package com.sample.branching;
 
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -12,9 +12,6 @@ public class TestController {
 
     @GetMapping("/order/number")
     public String orderNumber() {
-        UUID uuid = UUID.randomUUID();
-        System.out.println("order number is: "+ uuid.toString());
-        return uuid.toString();
+        return UUID.randomUUID().toString();
     }
 }
-
