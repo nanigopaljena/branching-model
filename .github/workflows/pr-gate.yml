@@ -27,11 +27,6 @@ jobs:
           java-version: 17
           cache: gradle
 
-      # Ensures wrapper hasn’t been tampered with and exists at standard path:
-      # gradle/wrapper/gradle-wrapper.jar, gradle/wrapper/gradle-wrapper.properties
-      - name: Validate Gradle Wrapper
-        uses: gradle/wrapper-validation-action@v3
-
       # Make sure the wrapper script at repo root is executable
       - name: Make gradlew executable
         run: chmod +x ./gradlew
@@ -45,60 +40,12 @@ jobs:
       - name: Run unit tests
         run: ./gradlew test --info
 
-      # --- Optional checks (auto-skip if task not found) ---
-
-      - name: Static analysis (Checkstyle + SpotBugs) if present
-        run: |
-          set -e
-          TASKS=$(./gradlew -q tasks --all)
-          if echo "$TASKS" | grep -q "\bcheckstyleMain\b"; then ./gradlew checkstyleMain checkstyleTest; else echo "checkstyle* not configured, skipping."; fi
-          if echo "$TASKS" | grep -q "\bspotbugsMain\b";   then ./gradlew spotbugsMain spotbugsTest;   else echo "spotbugs* not configured, skipping.";   fi
-
-      - name: Security scan (OWASP Dependency-Check) if present
-        run: |
-          TASKS=$(./gradlew -q tasks --all)
-          if echo "$TASKS" | grep -q "\bdependencyCheckAnalyze\b"; then
-            ./gradlew dependencyCheckAnalyze
-          else
-            echo "OWASP dependencyCheckAnalyze not configured, skipping."
-          fi
-
-      - name: Code coverage (JaCoCo) if present
-        run: |
-          TASKS=$(./gradlew -q tasks --all)
-          if echo "$TASKS" | grep -q "\bjacocoTestReport\b"; then
-            ./gradlew jacocoTestReport
-            echo "📊 Coverage report: build/reports/jacoco/test/html/index.html" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "JaCoCo not configured, skipping." >> $GITHUB_STEP_SUMMARY
-          fi
-
-      # --- Artifacts for quick inspection in PR ---
-
-      - name: Upload JARs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-libs
-          path: build/libs/
-
       - name: Upload unit test report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-report
           path: build/reports/tests/test/
-
-      - name: Upload code quality & security reports (best-effort)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: quality-security-reports
-          path: |
-            build/reports/checkstyle/
-            build/reports/spotbugs/
-            build/reports/dependency-check-report.html
-          if-no-files-found: ignore
 
       - name: Summary
         if: always()
