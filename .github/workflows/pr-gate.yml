@@ -53,3 +53,6 @@ jobs:
           echo "✅ Build and tests completed" >> $GITHUB_STEP_SUMMARY
           echo "🧪 Test report: build/reports/tests/test/index.html" >> $GITHUB_STEP_SUMMARY
           echo "📦 Artifacts uploaded: build-libs, test-report, quality-security-reports" >> $GITHUB_STEP_SUMMARY
+
+
+          # Test commit
